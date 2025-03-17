@@ -1,4 +1,4 @@
-import random, string
+import random, string, requests
 from typing import Iterator
 from extras.scripts import Script
 from dcim.models import Device
@@ -94,8 +94,8 @@ class APIFriendlyIPAddress(Script):
         self.log_debug('Initiating VirtualMachines: Done')
 
 
-class OxibackAdder(Script):
-    name = 'Oxiback Adder'
+class OxidizedIntegration(Script):
+    name = 'Oxidized Integration'
     description = 'Checks the device and adds oxiback tag if device has the standards.'
     commit_default = True
 
@@ -114,6 +114,8 @@ class OxibackAdder(Script):
             self.log_debug('Initiating Device', device)
             fail_condition = None
             fail_notes = []
+
+            reload_oxidized = True
 
             if device.site is None: 
                 fail_condition = True
@@ -141,15 +143,25 @@ class OxibackAdder(Script):
                 [self.log_warning(fail_note, device) for fail_note in fail_notes]
                 continue
             
-            if device.tags.get(id=oxiback_tag.id):
+            if device.tags.filter(id=oxiback_tag.id).exists():
                 self.log_info('Device already has `oxiback` tag', device)
                 continue
 
             if commit:
                     device.tags.add(oxiback_tag)
                     self.log_success('Tag Added to Device', device)
+                    reload_oxidized = True
             else:
                 self.log_info('Changes not Commited', device)
+
+        if reload_oxidized:
+            self.log_info('Changes Detected, sending refresh request to oxidized')
+            response = requests.get('http://192.168.205.46:8888/reload', headers={'content-type': 'application/json'})
+
+            if response and response.status_code == 200:
+                self.log_success('Refreshed Oxidized Data List')
+            else:
+                self.log_failure('Requests finished with non 200 status code')
 
 
 class GenerateSuppotToken(Script):
