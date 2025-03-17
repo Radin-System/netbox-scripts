@@ -137,12 +137,12 @@ class OxidizedIntegration(Script):
                 self.log_debug('Device `api_friendly_primary_ip` Custom Field is not defined', device)
                 fail_notes.append('Run `APIFriendlyIPAddress` Script for initiation')
 
-
             if fail_condition:
                 self.log_failure('Adding device to oxiback failed', device)
                 [self.log_warning(fail_note, device) for fail_note in fail_notes]
                 continue
-            
+
+
             if device.tags.filter(id=oxiback_tag.id).exists():
                 self.log_info('Device already has `oxiback` tag', device)
                 continue
