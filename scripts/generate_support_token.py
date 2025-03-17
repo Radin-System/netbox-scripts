@@ -25,31 +25,30 @@ class GenerateSuppotToken(Script):
         self.log_info(f'Commit mode: {'yes' if commit else 'no'}')
 
         tenants = Tenant.objects.all()
-        if tenants:
-            self.log_info('Got all the tenants')
+        if not tenants: self.log_failure('No tenants to preform operation'); return
 
-            self.log_debug('Checking Custom fields: Started')
-            if 'support_token' not in tenants[0].cf:
-                raise AbortScript('Custom Field is not defined: support_token')
+        self.log_info('Got all the tenants')
+
+        self.log_debug('Checking Custom fields: Started')
+        if 'support_token' not in tenants[0].cf:
+            raise AbortScript('Custom Field is not defined: support_token')
+
+        else:
+            self.log_debug('Checking Custom fields: Passed') 
+
+        for tenant in tenants:
+            if tenant.cf['support_token'] is not None:
+                self.log_info(f'Tenant already has token', tenant)
+                continue
+            
+            if commit:
+                self.log_debug(f'Generating token', tenant)
+                new_token =  Generate(32, punctuation=False)
+                tenant.snapshot()
+                tenant.custom_field_data['support_token'] = new_token
+                tenant.full_clean()
+                tenant.save()
+                self.log_success(f'Created new token', tenant)
 
             else:
-                self.log_debug('Checking Custom fields: Passed') 
-
-            for tenant in tenants:
-                if tenant.cf['support_token'] is not None:
-                    self.log_info(f'Tenant already has token', tenant)
-                    continue
-                
-                if commit:
-                    self.log_debug(f'Generating token', tenant)
-                    new_token =  Generate(32, punctuation=False)
-                    tenant.snapshot()
-                    tenant.custom_field_data['support_token'] = new_token
-                    tenant.full_clean()
-                    tenant.save()
-                    self.log_success(f'Created new token', tenant)
-
-                else:
-                    self.log_warning(f'No Token Found', tenant)
-        else:
-            self.log_warning(f'No Tenants Found')
+                self.log_warning(f'No Token Found', tenant)
