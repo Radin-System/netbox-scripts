@@ -28,28 +28,44 @@ class APIFriendlyIPAddress(Script):
     commit_default = True
 
     def run(self, data: dict, commit: bool) -> None:
+        # Helper Function
         def init_objects(objects: Iterator[Device|VirtualMachine]) -> None:
             for obj in objects if objects else []:
                 self.log_debug('Initiating Object', obj)
 
+                api_freindly_ip = obj.custom_field_data.get('api_friendly_primary_ip')
+
+                # Check for device ip address                
                 if not obj.primary_ip:
                     self.log_failure('Object has no IP Address', obj)
+                    # Remove friendly ip if exists
+                    if api_freindly_ip:
+                        if commit:
+                            obj.snapshot()
+                            obj.custom_field_data['api_friendly_primary_ip'] = None
+                            obj.full_clean()
+                            obj.save()
+                            self.log_success(f'Address removed: {current_ip}', obj)
+                        else:
+                            self.log_info(f'Address removal not commited', obj)
                     continue
 
-                ip_address = str(obj.primary_ip.address.ip)
+                current_ip = str(obj.primary_ip.address.ip)
 
-                if obj.custom_field_data.get('api_friendly_primary_ip') == ip_address:
-                    self.log_info(f'Unchanged address: {ip_address}', obj)
+                # Check unmodified
+                if api_freindly_ip == current_ip:
+                    self.log_info(f'Unchanged address: {current_ip}', obj)
                     continue
 
+                # Save Changes
                 if commit:
                     obj.snapshot()
-                    obj.custom_field_data['api_friendly_primary_ip'] = ip_address
+                    obj.custom_field_data['api_friendly_primary_ip'] = current_ip
                     obj.full_clean()
                     obj.save()
-                    self.log_success(f'Address set: {ip_address}', obj)
-                
-                self.log_warning(f'Address not commited: {ip_address}', obj)
+                    self.log_success(f'Address set: {current_ip}', obj)
+
+                self.log_info(f'Address not commited: {current_ip}', obj)
 
         self.log_info(f'Commit mode: {'yes' if commit else 'no'}')
 
@@ -91,10 +107,11 @@ class OxibackAdder(Script):
         devices = Device.objects.all()
         if not devices: raise AbortScript('No device to preform operation')
 
-        oxiback_tag = Tag.objects.get('oxiback')
+        oxiback_tag = Tag.objects.get(name='Oxiback')
         if not oxiback_tag: raise AbortScript('Unable to get oxiback tag')
 
         for device in devices:
+            self.log_debug('Initiating Device', device)
             fail_condition = None
             fail_notes = []
 
@@ -123,9 +140,16 @@ class OxibackAdder(Script):
                 self.log_failure('Adding device to oxiback failed', device)
                 [self.log_warning(fail_note, device) for fail_note in fail_notes]
                 continue
+            
+            if device.tags.get(id=oxiback_tag.id):
+                self.log_info('Device already has `oxiback` tag', device)
+                continue
 
             if commit:
-                device.tags.add(oxiback_tag)
+                    device.tags.add(oxiback_tag)
+                    self.log_success('Tag Added to Device', device)
+            else:
+                self.log_info('Changes not Commited', device)
 
 
 class GenerateSuppotToken(Script):
