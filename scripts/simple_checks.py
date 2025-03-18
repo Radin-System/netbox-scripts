@@ -115,7 +115,7 @@ class OxidizedIntegration(Script):
             fail_condition = None
             fail_notes = []
 
-            reload_oxidized = True
+            reload_oxidized = None
 
             if device.site is None: 
                 fail_condition = True
