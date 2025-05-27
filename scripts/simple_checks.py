@@ -110,12 +110,12 @@ class OxidizedIntegration(Script):
         oxiback_tag = Tag.objects.get(name='Oxiback')
         if not oxiback_tag: raise AbortScript('Unable to get oxiback tag')
 
+        reload_oxidized = None
+
         for device in devices:
             self.log_debug('Initiating Device', device)
             fail_condition = None
             fail_notes = []
-
-            reload_oxidized = None
 
             if device.site is None: 
                 fail_condition = True
