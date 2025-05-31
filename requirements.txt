@@ -1,0 +1,4 @@
+requests
+zabbix_utils
+netbox_api
+paramiko

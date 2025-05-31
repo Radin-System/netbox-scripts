@@ -1,5 +1,5 @@
 import random, string, requests
-from typing import Iterator
+from typing import Iterator, Literal, LiteralString
 from extras.scripts import Script
 from dcim.models import Device
 from tenancy.models import Tenant
@@ -23,9 +23,9 @@ def generate_random_string(length:int=10,*,
 
 
 class APIFriendlyIPAddress(Script):
-    name = 'API Friendly IP Address'
-    description = 'Sets the IP address as custom field in devices and machines'
-    commit_default = True
+    name: LiteralString = 'API Friendly IP Address'
+    description: LiteralString = 'Sets the IP address as custom field in devices and machines'
+    commit_default: Literal[True] = True
 
     def run(self, data: dict, commit: bool) -> None:
         # Helper Function
@@ -86,18 +86,18 @@ class APIFriendlyIPAddress(Script):
         self.log_debug('Checking Custom Fields: Passed') 
 
         self.log_debug('Initiating Devices: Started')
-        init_objects(devices)
+        init_objects(devices) # type: ignore
         self.log_debug('Initiating Devices: Done')
 
         self.log_debug('Initiating VirtualMachines: Started')
-        init_objects(vms)
+        init_objects(vms) # type: ignore
         self.log_debug('Initiating VirtualMachines: Done')
 
 
 class OxidizedIntegration(Script):
-    name = 'Oxidized Integration'
-    description = 'Checks the device and adds oxiback tag if device has the standards.'
-    commit_default = True
+    name: LiteralString = 'Oxidized Integration'
+    description: LiteralString = 'Checks the device and adds oxiback tag if device has the standards.'
+    commit_default: Literal[True] = True
 
     def run(self, data: dict, commit: bool) -> None:
         self.log_info(f'Commit mode: {'yes' if commit else 'no'}')
@@ -165,9 +165,9 @@ class OxidizedIntegration(Script):
 
 
 class GenerateSuppotToken(Script):
-    name = 'Generate Support Token'
-    description = 'Creates random generated token for tenants'
-    commit_default = True
+    name: LiteralString = 'Generate Support Token'
+    description: LiteralString = 'Creates random generated token for tenants'
+    commit_default: Literal[True] = True
 
     def run(self, data: dict, commit: bool) -> None:
         self.log_info(f'Commit mode: {'yes' if commit else 'no'}')

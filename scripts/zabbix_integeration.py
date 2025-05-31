@@ -13,6 +13,7 @@ Zabbix_Config: Dict[str, Any] = {
     'password': get_plugin_config('netbox_zabbix_integration', 'password'),
     'validate_certs': get_plugin_config('netbox_zabbix_integration', 'validate_certs'),
 }
+Zabbix_Config = {k: v for k, v in Zabbix_Config.items() if v is not None}
 
 class ZabbixMixin:
     log_debug = Script.log_debug
@@ -22,8 +23,13 @@ class ZabbixMixin:
     def init_zabbix(self, config: Dict[str, Any]) -> None:
         self.zabbix_client = ZabbixAPI(**config)
         self.zabbix_config = config
+        
+        # Getting Version
         zabbix_version = self.zabbix_client.api_version()
         self.log_info(f'Initiated Zabbix Client - Version: {zabbix_version}')
+
+        # Login
+        self.zabbix_client.login()
 
     def validate_device_custom_fields(self, devices) -> None:
         if not devices:
