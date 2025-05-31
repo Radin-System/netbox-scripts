@@ -28,13 +28,6 @@ class ZabbixMixin:
         zabbix_version = self.zabbix_client.api_version()
         self.log_info(f'Initiated Zabbix Client - Version: {zabbix_version}')
 
-        # Login
-        self.zabbix_client.login(
-            token=Zabbix_Config.get('token'),
-            user=Zabbix_Config.get('user'),
-            password=Zabbix_Config.get('password')
-            )
-
     def validate_device_custom_fields(self, devices) -> None:
         if not devices:
             if not devices: self.log_failure('No device to preform operation')
