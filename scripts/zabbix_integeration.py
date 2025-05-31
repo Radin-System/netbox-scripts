@@ -43,7 +43,7 @@ class ZabbixMixin:
             return response[0].get('hostid')
         else:
             return None
-        
+
 
 class Zabbix_CheckHosts(Script, ZabbixMixin):
     name = 'Zabbix - Check Hosts'
