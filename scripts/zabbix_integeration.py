@@ -1,4 +1,4 @@
-from typing import Any, List, Dict, Literal, LiteralString
+from typing import Any, Dict, Literal, LiteralString
 from zabbix_utils import ZabbixAPI
 from extras.scripts import Script
 from dcim.models import Device
@@ -9,7 +9,7 @@ from netbox.plugins import get_plugin_config
 Zabbix_Config: Dict[str, Any] = {
     'url': get_plugin_config('netbox_zabbix_integration', 'url'),
     'token': get_plugin_config('netbox_zabbix_integration', 'token'),
-    'username': get_plugin_config('netbox_zabbix_integration', 'username'),
+    'user': get_plugin_config('netbox_zabbix_integration', 'user'),
     'password': get_plugin_config('netbox_zabbix_integration', 'password'),
     'validate_certs': get_plugin_config('netbox_zabbix_integration', 'validate_certs'),
 }
