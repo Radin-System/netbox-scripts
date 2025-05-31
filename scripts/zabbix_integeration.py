@@ -1,4 +1,4 @@
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Literal, LiteralString
 from zabbix_utils import ZabbixAPI
 from extras.scripts import Script
 from dcim.models import Device
@@ -15,20 +15,24 @@ Zabbix_Config: Dict[str, Any] = {
 }
 
 class ZabbixMixin:
+    log_debug = Script.log_debug
+    log_info = Script.log_info
+    log_failure = Script.log_failure
+
     def init_zabbix(self, config: Dict[str, Any]) -> None:
         self.zabbix_client = ZabbixAPI(**config)
         self.zabbix_config = config
         zabbix_version = self.zabbix_client.api_version()
         self.log_info(f'Initiated Zabbix Client - Version: {zabbix_version}')
 
-    def validate_device_custom_fields(self, devices: List[Device]) -> None:
+    def validate_device_custom_fields(self, devices) -> None:
         if not devices:
             if not devices: self.log_failure('No device to preform operation')
 
         if devices and 'zabbix_host_id' not in devices[0].cf:
             raise AbortScript('Custom Field is not defined in Devices: zabbix_host_id')
 
-    def get_id_by_hostname(self, hostname) -> int:
+    def get_id_by_hostname(self, hostname) -> int | None:
         response = self.zabbix_client.send_api_request(
             method='host.get',
             params={
@@ -41,14 +45,15 @@ class ZabbixMixin:
 
         if response and len(response) > 0:
             return response[0].get('hostid')
+
         else:
             return None
 
 
 class Zabbix_CheckHosts(Script, ZabbixMixin):
-    name = 'Zabbix - Check Hosts'
-    description = 'Checks All Devices'
-    commit_default = True
+    name: LiteralString = 'Zabbix - Check Hosts'
+    description: LiteralString = 'Checks All Devices'
+    commit_default: Literal[True] = True
 
     def run(self, data: dict, commit: bool) -> None:
         # initiate Zabbix Api
