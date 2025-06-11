@@ -45,7 +45,6 @@ class ZabbixMixin:
                 'output': ['hostid'],
             }
         )
-
         result: list = response.get('result') # type: ignore
 
         if response and len(result) > 0:
@@ -61,6 +60,32 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
     description: LiteralString = 'Checks All Devices'
     commit_default: Literal[True] = True
 
+    def check_id(self, device: Device, commit: bool) -> int | None:
+        # Getting ID from cf or zabbix itself
+        zabbix_host_id: int | None = device.cf.get('zabbix_host_id') or self.get_id_by_hostname(device.name)
+
+        if zabbix_host_id:
+            self.log_info(f'Device on Zabbix: <a href="{self.zabbix_config['url']}//zabbix.php?action=popup&popup=host.edit&hostid={zabbix_host_id}">Zabbix: {device.name}</a>', device)
+            
+            # Check if Device has the id set in `zabbix_host_id` and set it
+            if not device.cf.get('zabbix_host_id') and commit:
+                self.log_debug(f'Saving new device id {zabbix_host_id}', device)
+                device.snapshot()
+                device.custom_field_data['zabbix_host_id'] = zabbix_host_id
+                device.full_clean()
+                device.save()
+                self.log_success(f'Saved new id: {zabbix_host_id}', device)
+            
+            else:
+                self.log_warning('Found ID from zabbix but cannot save it: commit = False')
+
+            return int(zabbix_host_id)
+
+        else:
+            self.log_warning(f'No Device ID Found on Zabbix or Netbox, Check hostname on both services')
+            return None
+
+
     def run(self, data: dict, commit: bool) -> None:
         # initiate Zabbix Api
         self.init_zabbix(Zabbix_Config)
@@ -72,17 +97,8 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
         for device in devices:
             self.log_debug('Initiating Object', device)
 
-            if device.cf.get('zabbix_host_id'):
-                self.log_debug('Object has zabbix id set')
+            try:
+                zabbix_host_id = self.check_id(device, commit)
 
-            else:
-                self.log_warning('Object Does not have zabbix id set in custom field')
-                self.log_debug('Trying to lookup the object', device)
-                zabbix_host_id = self.get_id_by_hostname(device.name)
-
-                if zabbix_host_id is not None:
-                    self.log_info(f'Found the id from zabbix: {self.zabbix_config['url']}//zabbix.php?action=popup&popup=host.edit&hostid={zabbix_host_id}')
-                
-                else:
-                    self.log_info(f'Device Not Found Skipping')
-                    continue
+            except Exception as e:
+                self.log_failure(f'Error While initiating device: {e}', device)
