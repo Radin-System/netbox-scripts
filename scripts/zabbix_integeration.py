@@ -153,6 +153,19 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
             else:
                 self.log_warning(self.generate_commit_off_log('status'), device)
 
+    def sync_description(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
+        """Syncs device Description from saved cf id (Keeps Netbox Version)"""
+        zabbix_description = self.get_host_parameter(zabbix_host_id, 'description')
+        self.log_debug(self.generate_compare_log('description', '<Description>', '<Comments>'))
+
+        if not device.comments == zabbix_description:
+            if commit:
+                self.set_host_parameter(zabbix_host_id, 'description', device.comments)
+                self.log_success(self.generate_changed_parameter_log('hostname', 'push', '<Comments>'), device)
+            
+            else:
+                self.log_warning(self.generate_commit_off_log('description'))
+
     def run(self, data: dict, commit: bool) -> None:
         # initiate Zabbix Api
         self.init_zabbix(Zabbix_Config)
@@ -171,6 +184,7 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
                 self.sync_id(device, zabbix_host_id, commit)
                 self.sync_hostname(device, zabbix_host_id, commit)
                 self.sync_status(device, zabbix_host_id, commit)
+                self.sync_description(device, zabbix_host_id, commit)
 
             except Exception as e:
                 self.log_failure(f'Error syncing: {e}', device)
