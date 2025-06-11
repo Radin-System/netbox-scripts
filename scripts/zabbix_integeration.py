@@ -86,13 +86,19 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
     description: LiteralString = 'Checks All Devices'
     commit_default: Literal[True] = True
 
+    def generate_compare_log(self, parameter: str, zabbix_version: Any, netbox_version: Any) -> str:
+        return f'Comparing Parameter ({parameter}):\n  - zabbix={zabbix_version}\n  - netbox={netbox_version}'
+
+    def generate_commit_off(self, parameter: str) -> str:
+        return f'Unable to push or pull ({parameter}) --> commit=False'
+
     def get_zabbix_host_id(self, device: Device) -> int:
         """Get Zabbix Host ID From Device Custom Fields or From zabbix Server"""
         zabbix_host_id = device.cf.get('zabbix_host_id') or self.get_id_by_hostname(device.name)
         if not zabbix_host_id:
-            raise ValueError('No Device ID Found on Zabbix or Netbox, Check hostname on both services.')
+            raise Exception('No Device ID Found on Zabbix or Netbox, Check hostname on both services.')
 
-        return zabbix_host_id 
+        return zabbix_host_id
 
     def sync_id(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
         """Checks if Device has host id set in `zabbix_host_id`"""
@@ -111,35 +117,36 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
     def sync_hostname(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
         """Syncs hostname from saved cf id (Keeps Netbox Version)"""
         zabbix_hostname = self.get_host_parameter(zabbix_host_id, 'host', str)
+        self.log_debug(self.generate_compare_log('hostname', zabbix_hostname, device.name), device)
+
         if not device.name == zabbix_hostname:
             if commit:
-                self.log_debug(f'Changing the Device Name: Zabbix -> {zabbix_hostname} -- Netbox -> {device.name}', device)
                 self.set_host_parameter(zabbix_host_id, 'host', device.name)
                 self.log_success(f'Pushed Netbox Version: {device.name}', device)
 
             else:
-                self.log_warning('Device name conflict in zabbix but cannot save it: commit=False', device)
+                self.log_warning(self.generate_commit_off('hostname'), device)
 
     def sync_status(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
         """Syncs device Status from saved cf id (Keeps Netbox Version)"""
         zabbix_status = self.get_host_parameter(zabbix_host_id, 'status', int) # 0=Enable, 1=Disable
+        self.log_debug(self.generate_compare_log('status', 'enable' if zabbix_status == 0 else 'disable', device.status))
+
         if device.status == 'offline' and zabbix_status == 0:
-            if commit:
-                self.log_debug(f'Changing Device Status: Zabbix -> Enable -- Netbox -> offline')
+            if commit:                
                 self.set_host_parameter(zabbix_host_id, 'status', 1)
-                self.log_success(f'Pushed Netbox Version: Disabled')
+                self.log_success(f'Pushed Netbox Version: offline')
 
             else:
-                self.log_warning('Device status conflict in zabbix but cannot save it: commit=False', device)
+                self.log_warning(self.generate_commit_off('status'), device)
 
         elif device.status != 'offline' and zabbix_status == 1:
             if commit:
-                self.log_debug(f'Changing Device Status: Zabbix -> Disable -- Netbox -> {device.status}')
                 self.set_host_parameter(zabbix_host_id, 'status', 0)
-                self.log_success(f'Pushed Netbox Version: Disabled')
+                self.log_success(f'Pushed Netbox Version: enabled')
 
             else:
-                self.log_warning('Device status conflict in zabbix but cannot save it: commit=False', device)
+                self.log_warning(self.generate_commit_off('status'), device)
 
     def run(self, data: dict, commit: bool) -> None:
         # initiate Zabbix Api
@@ -154,12 +161,11 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
 
             try:
                 zabbix_host_id: int = self.get_zabbix_host_id(device)
-                self.log_info(f'Device on Zabbix: {self.generate_zabbix_host_link(zabbix_host_id, device)}', device)
+                self.log_info(f'Syncing from Zabbix: {self.generate_zabbix_host_link(zabbix_host_id, device)}', device)
 
                 self.sync_id(device, zabbix_host_id, commit)
                 self.sync_hostname(device, zabbix_host_id, commit)
                 self.sync_status(device, zabbix_host_id, commit)
 
-
             except Exception as e:
-                self.log_failure(f'Error While initiating device: {e}', device)
+                self.log_failure(f'Error syncing: {e}', device)
