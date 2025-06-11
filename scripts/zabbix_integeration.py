@@ -1,4 +1,4 @@
-from typing import Any, Dict, Literal, LiteralString
+from typing import Any, Dict, Literal, LiteralString, Optional, Type
 from zabbix_utils import ZabbixAPI
 from extras.scripts import Script
 from dcim.models import Device
@@ -35,9 +35,11 @@ class ZabbixMixin:
         if devices and 'zabbix_host_id' not in devices[0].cf:
             raise AbortScript('Custom Field is not defined in Devices: zabbix_host_id')
 
-    def get_id_by_hostname(self, hostname: str|None) -> int | None:
-        if hostname is None: return
+    def generate_zabbix_host_link(self, host_id: int, device: Device) -> str:
+        """Creates Human Clickable link for host"""
+        return f'<a href="{self.zabbix_config['url']}//zabbix.php?action=popup&popup=host.edit&hostid={host_id}">Zabbix: {device.name}</a>'
 
+    def get_id_by_hostname(self, hostname: str|None) -> int | None:
         response = self.zabbix_client.send_api_request(
             method='host.get',
             params={
@@ -54,21 +56,48 @@ class ZabbixMixin:
             zabbix_host_id = first_host.get('hostid')
             return int(zabbix_host_id) if zabbix_host_id is not None else None
 
+    def get_host_parameter(self, host_id: int, output: str, type: Type = str) -> None:
+        response = self.zabbix_client.send_api_request(
+            method='host.get',
+            params={
+                'filter': {
+                    'hostid': host_id,
+                },
+                'output': [output]
+            }
+        )
+        result: list = response.get('result') # type: ignore
+
+        if response and len(result) > 0:
+            first_host: dict = result[0]
+            return type(first_host.get(output))
+
+    def set_host_parameter(self, host_id: int, key: str, value: Any) -> None:
+        self.zabbix_client.send_api_request(
+            method='host.update',
+            params={
+                'hostid': host_id,
+                key: value,
+            }
+        )
 
 class Zabbix_CheckHosts(Script, ZabbixMixin):
     name: LiteralString = 'Zabbix - Check Hosts'
     description: LiteralString = 'Checks All Devices'
     commit_default: Literal[True] = True
 
-    def check_id(self, device: Device, commit: bool) -> int | None:
-        # Getting ID from cf or zabbix itself
-        zabbix_host_id: int | None = device.cf.get('zabbix_host_id') or self.get_id_by_hostname(device.name)
+    def get_zabbix_host_id(self, device: Device) -> int:
+        """Get Zabbix Host ID From Device Custom Fields or From zabbix Server"""
+        zabbix_host_id = device.cf.get('zabbix_host_id') or self.get_id_by_hostname(device.name)
+        if not zabbix_host_id:
+            raise ValueError('No Device ID Found on Zabbix or Netbox, Check hostname on both services.')
 
-        if zabbix_host_id:
-            self.log_info(f'Device on Zabbix: <a href="{self.zabbix_config['url']}//zabbix.php?action=popup&popup=host.edit&hostid={zabbix_host_id}">Zabbix: {device.name}</a>', device)
-            
-            # Check if Device has the id set in `zabbix_host_id` and set it
-            if not device.cf.get('zabbix_host_id') and commit:
+        return zabbix_host_id 
+
+    def sync_id(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
+        """Checks if Device has host id set in `zabbix_host_id`"""
+        if not device.cf.get('zabbix_host_id'):
+            if commit:
                 self.log_debug(f'Saving new device id {zabbix_host_id}', device)
                 device.snapshot()
                 device.custom_field_data['zabbix_host_id'] = zabbix_host_id
@@ -77,14 +106,40 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
                 self.log_success(f'Saved new id: {zabbix_host_id}', device)
 
             else:
-                self.log_warning('Found ID from zabbix but cannot save it: commit = False', device)
+                self.log_warning('Found ID from zabbix but cannot save it: commit=False', device)
 
-            return int(zabbix_host_id)
+    def sync_hostname(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
+        """Syncs hostname from saved cf id (Keeps Netbox Version)"""
+        zabbix_hostname = self.get_host_parameter(zabbix_host_id, 'host', str)
+        if not device.name == zabbix_hostname:
+            if commit:
+                self.log_debug(f'Changing the Device Name: Zabbix -> {zabbix_hostname} -- Netbox -> {device.name}', device)
+                self.set_host_parameter(zabbix_host_id, 'host', device.name)
+                self.log_success(f'Pushed Netbox Version: {device.name}', device)
 
-        else:
-            self.log_warning(f'No Device ID Found on Zabbix or Netbox, Check hostname on both services', device)
-            return None
+            else:
+                self.log_warning('Device name conflict in zabbix but cannot save it: commit=False', device)
 
+    def sync_status(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
+        """Syncs device Status from saved cf id (Keeps Netbox Version)"""
+        zabbix_status = self.get_host_parameter(zabbix_host_id, 'status', int) # 0=Enable, 1=Disable
+        if device.status == 'offline' and zabbix_status == 0:
+            if commit:
+                self.log_debug(f'Changing Device Status: Zabbix -> Enable -- Netbox -> offline')
+                self.set_host_parameter(zabbix_host_id, 'status', 1)
+                self.log_success(f'Pushed Netbox Version: Disabled')
+
+            else:
+                self.log_warning('Device status conflict in zabbix but cannot save it: commit=False', device)
+
+        elif device.status != 'offline' and zabbix_status == 1:
+            if commit:
+                self.log_debug(f'Changing Device Status: Zabbix -> Disable -- Netbox -> {device.status}')
+                self.set_host_parameter(zabbix_host_id, 'status', 0)
+                self.log_success(f'Pushed Netbox Version: Disabled')
+
+            else:
+                self.log_warning('Device status conflict in zabbix but cannot save it: commit=False', device)
 
     def run(self, data: dict, commit: bool) -> None:
         # initiate Zabbix Api
@@ -98,7 +153,13 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
             self.log_debug('Initiating Object', device)
 
             try:
-                zabbix_host_id = self.check_id(device, commit)
+                zabbix_host_id: int = self.get_zabbix_host_id(device)
+                self.log_info(f'Device on Zabbix: {self.generate_zabbix_host_link(zabbix_host_id, device)}', device)
+
+                self.sync_id(device, zabbix_host_id, commit)
+                self.sync_hostname(device, zabbix_host_id, commit)
+                self.sync_status(device, zabbix_host_id, commit)
+
 
             except Exception as e:
                 self.log_failure(f'Error While initiating device: {e}', device)
