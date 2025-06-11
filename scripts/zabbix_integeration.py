@@ -46,8 +46,11 @@ class ZabbixMixin:
             }
         )
 
-        if response and len(response) > 0:
-            return response.get('result')[0].get('hostid') # type: ignore
+        result: list = response.get('result') # type: ignore
+
+        if response and len(result) > 0:
+            first_host: dict = result[0]
+            return first_host.get('hostid') 
 
         else:
             return None
@@ -79,3 +82,7 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
 
                 if zabbix_host_id is not None:
                     self.log_info(f'Found the id from zabbix: {self.zabbix_config['url']}//zabbix.php?action=popup&popup=host.edit&hostid={zabbix_host_id}')
+                
+                else:
+                    self.log_info(f'Device Not Found Skipping')
+                    continue
