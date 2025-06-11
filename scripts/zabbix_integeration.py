@@ -37,7 +37,7 @@ class ZabbixMixin:
 
     def generate_zabbix_host_link(self, host_id: int, device: Device) -> str:
         """Creates Human Clickable link for host"""
-        return f'<a href="{self.zabbix_config['url']}//zabbix.php?action=popup&popup=host.edit&hostid={host_id}">Zabbix: {device.name}</a>'
+        return f'<a href="{self.zabbix_config['url']}//zabbix.php?action=popup&popup=host.edit&hostid={host_id}">({device.name} on Zabbix)</a>'
 
     def get_id_by_hostname(self, hostname: str|None) -> int | None:
         response = self.zabbix_client.send_api_request(
