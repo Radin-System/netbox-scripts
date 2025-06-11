@@ -56,7 +56,7 @@ class ZabbixMixin:
             zabbix_host_id = first_host.get('hostid')
             return int(zabbix_host_id) if zabbix_host_id is not None else None
 
-    def get_host_parameter(self, host_id: int, output: str, type: Type = str) -> None:
+    def get_host_parameter(self, host_id: int, output: str, output_type: Type = str) -> None:
         response = self.zabbix_client.send_api_request(
             method='host.get',
             params={
@@ -70,7 +70,7 @@ class ZabbixMixin:
 
         if response and len(result) > 0:
             first_host: dict = result[0]
-            return type(first_host.get(output))
+            return output_type(first_host.get(output))
 
     def set_host_parameter(self, host_id: int, key: str, value: Any) -> None:
         self.zabbix_client.send_api_request(
@@ -89,8 +89,13 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
     def generate_compare_log(self, parameter: str, zabbix_version: Any, netbox_version: Any) -> str:
         return f'Comparing Parameter ({parameter}):\n  - zabbix={zabbix_version}\n  - netbox={netbox_version}'
 
-    def generate_commit_off(self, parameter: str) -> str:
+    def generate_commit_off_log(self, parameter: str) -> str:
         return f'Unable to push or pull ({parameter}) --> commit=False'
+
+    def generate_changed_parameter_log(self, parameter: str, change_type: Literal['push', 'pull'], value: Any) -> str:
+        if change_type == 'push': start_text = 'Pushed to Zabbix'
+        elif change_type == 'pull': start_text = 'Pulled From Zabbix'
+        return f'{start_text} Parameter ({parameter}): {value}'
 
     def get_zabbix_host_id(self, device: Device) -> int:
         """Get Zabbix Host ID From Device Custom Fields or From zabbix Server"""
@@ -109,10 +114,10 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
                 device.custom_field_data['zabbix_host_id'] = zabbix_host_id
                 device.full_clean()
                 device.save()
-                self.log_success(f'Saved new id: {zabbix_host_id}', device)
+                self.log_success(self.generate_changed_parameter_log('hostid', 'pull', zabbix_host_id), device)
 
             else:
-                self.log_warning('Found ID from zabbix but cannot save it: commit=False', device)
+                self.log_warning(self.generate_commit_off_log('hostid'), device)
 
     def sync_hostname(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
         """Syncs hostname from saved cf id (Keeps Netbox Version)"""
@@ -122,10 +127,10 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
         if not device.name == zabbix_hostname:
             if commit:
                 self.set_host_parameter(zabbix_host_id, 'host', device.name)
-                self.log_success(f'Pushed Netbox Version: {device.name}', device)
+                self.log_success(self.generate_changed_parameter_log('hostname', 'push', device.name), device)
 
             else:
-                self.log_warning(self.generate_commit_off('hostname'), device)
+                self.log_warning(self.generate_commit_off_log('hostname'), device)
 
     def sync_status(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
         """Syncs device Status from saved cf id (Keeps Netbox Version)"""
@@ -135,18 +140,18 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
         if device.status == 'offline' and zabbix_status == 0:
             if commit:                
                 self.set_host_parameter(zabbix_host_id, 'status', 1)
-                self.log_success(f'Pushed Netbox Version: offline')
+                self.log_success(self.generate_changed_parameter_log('status', 'push', 'disable'), device)
 
             else:
-                self.log_warning(self.generate_commit_off('status'), device)
+                self.log_warning(self.generate_commit_off_log('status'), device)
 
         elif device.status != 'offline' and zabbix_status == 1:
             if commit:
                 self.set_host_parameter(zabbix_host_id, 'status', 0)
-                self.log_success(f'Pushed Netbox Version: enabled')
+                self.log_success(self.generate_changed_parameter_log('status', 'push', 'enable'), device)
 
             else:
-                self.log_warning(self.generate_commit_off('status'), device)
+                self.log_warning(self.generate_commit_off_log('status'), device)
 
     def run(self, data: dict, commit: bool) -> None:
         # initiate Zabbix Api
