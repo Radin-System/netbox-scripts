@@ -135,7 +135,7 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
     def sync_status(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
         """Syncs device Status from saved cf id (Keeps Netbox Version)"""
         zabbix_status = self.get_host_parameter(zabbix_host_id, 'status', int) # 0=Enable, 1=Disable
-        self.log_debug(self.generate_compare_log('status', 'enable' if zabbix_status == 0 else 'disable', device.status))
+        self.log_debug(self.generate_compare_log('status', 'enable' if zabbix_status == 0 else 'disable', device.status), device)
 
         if device.status == 'offline' and zabbix_status == 0:
             if commit:                
@@ -156,7 +156,7 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
     def sync_description(self, device: Device, zabbix_host_id: int, commit: bool) -> None:
         """Syncs device Description from saved cf id (Keeps Netbox Version)"""
         zabbix_description = self.get_host_parameter(zabbix_host_id, 'description')
-        self.log_debug(self.generate_compare_log('description', '<Description>', '<Comments>'))
+        self.log_debug(self.generate_compare_log('description', '<Description>', '<Comments>'), device)
 
         if not device.comments == zabbix_description:
             if commit:
