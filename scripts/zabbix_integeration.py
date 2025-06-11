@@ -175,8 +175,6 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
         self.validate_device_custom_fields(devices)
 
         for device in devices:
-            self.log_debug('Initiating Object', device)
-
             try:
                 zabbix_host_id: int = self.get_zabbix_host_id(device)
                 self.log_info(f'Syncing from Zabbix: {self.generate_zabbix_host_link(zabbix_host_id, device)}', device)
