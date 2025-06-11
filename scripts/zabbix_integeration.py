@@ -35,7 +35,9 @@ class ZabbixMixin:
         if devices and 'zabbix_host_id' not in devices[0].cf:
             raise AbortScript('Custom Field is not defined in Devices: zabbix_host_id')
 
-    def get_id_by_hostname(self, hostname) -> int | None:
+    def get_id_by_hostname(self, hostname: str|None) -> int | None:
+        if hostname is None: return
+
         response = self.zabbix_client.send_api_request(
             method='host.get',
             params={
@@ -49,10 +51,8 @@ class ZabbixMixin:
 
         if response and len(result) > 0:
             first_host: dict = result[0]
-            return first_host.get('hostid') 
-
-        else:
-            return None
+            zabbix_host_id = first_host.get('hostid')
+            return int(zabbix_host_id) if zabbix_host_id is not None else None
 
 
 class Zabbix_CheckHosts(Script, ZabbixMixin):
@@ -75,14 +75,14 @@ class Zabbix_CheckHosts(Script, ZabbixMixin):
                 device.full_clean()
                 device.save()
                 self.log_success(f'Saved new id: {zabbix_host_id}', device)
-            
+
             else:
-                self.log_warning('Found ID from zabbix but cannot save it: commit = False')
+                self.log_warning('Found ID from zabbix but cannot save it: commit = False', device)
 
             return int(zabbix_host_id)
 
         else:
-            self.log_warning(f'No Device ID Found on Zabbix or Netbox, Check hostname on both services')
+            self.log_warning(f'No Device ID Found on Zabbix or Netbox, Check hostname on both services', device)
             return None
 
 
