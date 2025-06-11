@@ -23,7 +23,7 @@ class ZabbixMixin:
     def init_zabbix(self, config: Dict[str, Any]) -> None:
         self.zabbix_client = ZabbixAPI(**config)
         self.zabbix_config = config
-        
+
         # Getting Version
         zabbix_version = self.zabbix_client.api_version()
         self.log_info(f'Initiated Zabbix Client - Version: {zabbix_version}')
@@ -40,14 +40,14 @@ class ZabbixMixin:
             method='host.get',
             params={
                 'filter': {
-                    'host': [hostname]
+                    'host': hostname,
                 },
-                'output': ['hostid']
+                'output': ['hostid'],
             }
         )
 
         if response and len(response) > 0:
-            return response[0].get('hostid')
+            return response.get('result')[0].get('hostid') # type: ignore
 
         else:
             return None
