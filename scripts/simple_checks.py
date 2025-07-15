@@ -1,7 +1,7 @@
 import random, string, requests
 from typing import Iterator, Literal, LiteralString
 from extras.scripts import Script
-from dcim.models import Device
+from dcim.models import Site, Device
 from tenancy.models import Tenant
 from extras.models import Tag
 from virtualization.models import VirtualMachine
@@ -166,37 +166,36 @@ class OxidizedIntegration(Script):
 
 class GenerateSuppotToken(Script):
     name: LiteralString = 'Generate Support Token'
-    description: LiteralString = 'Creates random generated token for tenants'
+    description: LiteralString = 'Creates random generated token for sites'
     commit_default: Literal[True] = True
 
     def run(self, data: dict, commit: bool) -> None:
         self.log_info(f'Commit mode: {'yes' if commit else 'no'}')
 
-        tenants = Tenant.objects.all()
-        if not tenants: raise AbortScript('No tenants to preform operation')
-
-        self.log_info('Got all the tenants')
+        sites = Site.objects.all()
+        if not sites: raise AbortScript('No sites to preform operation')
+        self.log_info('Got all the sites')
 
         self.log_debug('Checking Custom fields: Started')
-        if 'support_token' not in tenants[0].cf:
-            raise AbortScript('Custom Field is not defined: support_token')
+        if 'radin_api_token' not in sites[0].cf:
+            raise AbortScript('Custom Field is not defined: radin_api_token')
 
         else:
             self.log_debug('Checking Custom fields: Passed') 
 
-        for tenant in tenants:
-            if tenant.cf['support_token'] is not None:
-                self.log_info(f'Tenant already has token', tenant)
+        for site in sites:
+            if site.cf['radin_api_token'] is not None:
+                self.log_info(f'Tenant already has token', site)
                 continue
             
             if commit:
-                self.log_debug(f'Generating token', tenant)
+                self.log_debug(f'Generating token', site)
                 new_token =  generate_random_string(32, punctuation=False)
-                tenant.snapshot()
-                tenant.custom_field_data['support_token'] = new_token
-                tenant.full_clean()
-                tenant.save()
-                self.log_success(f'Created new token', tenant)
+                site.snapshot()
+                site.custom_field_data['radin_api_token'] = new_token
+                site.full_clean()
+                site.save()
+                self.log_success(f'Created new token', site)
 
             else:
-                self.log_warning(f'No Token Found', tenant)
+                self.log_warning(f'No Token Found', site)
